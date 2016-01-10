@@ -1,14 +1,22 @@
 # Deployment-LAMP-stack-to-AWS
 
+to /etc/ansible/hosts
 ```
 [local]
 localhost
 ```
-to /etc/ansible/hosts
 
+to ~/.boto
 ```
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
 ```
-to ~/.boto
+
+to start
+```
+ansible-playbook -i /etc/ansible/hosts site.yml
+```
+
+
+
 
