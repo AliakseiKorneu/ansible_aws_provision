@@ -1,0 +1,98 @@
+---
+#VPC Initial Parameters
+ vpc_name: test
+ vpc_region: us-west-2 
+ vpc_cidr_block: 10.10.0.0/16
+ public_cidr_1: 10.10.10.0/24
+ public_az_1: "{{ vpc_region }}a"
+ public_cidr_2: 10.10.20.0/24
+ public_az_2: "{{ vpc_region }}b"
+ private_cidr: 10.10.30.0/24
+ private_az: "{{ vpc_region }}c"
+
+#Key parameters
+ key_name: "{{ vpc_name }}-key"
+ ssh_key_location: ~/.ssh/id_rsa.pub 
+
+#Infrastructure Initial Parameters
+ web_instance_type: t2.micro
+ ami_image: ami-5189a661
+ web_server_name: Web_server
+
+#VPC Subnets parameters
+ vpc_subnets:
+   - cidr: "{{ public_cidr_1 }}" # Public Subnet-1
+     az: "{{ public_az_1 }}"
+     resource_tags: { "Name":"{{ vpc_name }}-{{ public_az_1 }}-public-subnet" }
+   - cidr: "{{ public_cidr_2 }}" # Public Subnet-2
+     az: "{{ public_az_2 }}"
+     resource_tags: { "Name":"{{ vpc_name }}-{{ public_az_2 }}-public-subnet" }
+   - cidr: "{{ private_cidr }}" # Private Subnet
+     az: "{{ private_az }}"
+     resource_tags: { "Name":"{{ vpc_name }}-{{ private_az }}-private-subnet" }
+
+#Routing
+ public_subnet_rt:
+   - subnets:
+       - "{{ public_cidr_1 }}"
+       - "{{ public_cidr_2 }}"
+     routes:
+       - dest: 0.0.0.0/0
+         gw: igw
+#Rules for web SG
+ web_security_groups:
+   - sg_name: demo-sg
+     sg_description: Demo sg
+     sg_rules:
+       - proto: tcp
+         from_port: 22
+         to_port: 22
+         cidr_ip: 0.0.0.0/0
+       - proto: tcp
+         from_port: 80
+         to_port: 80
+         cidr_ip: 0.0.0.0/0
+
+
+#RDS Parameters
+ multi_zone_option: no
+ rds_instance_name: testdb
+ rds_db_engine: MySQL
+ rds_db_size: 5
+ rds_db_name: testdbname
+ rds_instance_type: db.t2.micro
+ rds_db_username: testcred
+ rds_db_password: testcred
+ rds_subnet_group: test_subnet_group
+ rds_sg_description: Test Subnet Group
+ backup_retention_period: 0
+ rds_security_groups:
+   - sg_name: db-sg
+     sg_description: This sg is for db/rds instance
+     sg_rules:
+       - proto: tcp
+         from_port: 3306
+         to_port: 3306
+         group_name: "{{ web_security_groups[0].sg_name }}"
+         group_desc: "{{ web_security_groups[0].sg_description }}"
+
+ load_balancer_name: "{{ vpc_name }}-ELB"
+
+#ELB Parameters
+ elb_purge_subnets: yes
+ elb_cross_az_load_balancing: yes
+ elb_ping_protocol: tcp
+ elb_ping_port: 80
+ elb_response_timeout: 5
+ elb_interval: 30
+ elb_unhealthy_threshold: 2
+ elb_healthy_threshold: 10
+ elb_connection_draining_timeout: 60 
+ elb_security_groups:
+   - sg_name: "{{ load_balancer_name }}-sg"
+     sg_description: "This sg is for {{ load_balancer_name }}"
+     sg_rules:
+       - proto: tcp
+         from_port: 80
+         to_port: 80
+         cidr_ip: 0.0.0.0/0

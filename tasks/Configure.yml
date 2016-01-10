@@ -1,0 +1,26 @@
+---
+- hosts: local
+  connection: local
+  gather_facts: no
+  vars_files:
+  - ../vars/Provision.yml
+  tasks:
+  - name: Set volumes ID
+    set_fact:
+     ip_1: "{{ lookup('file', '../vars/ip_1-id.yml') }}"
+     ip_2: "{{ lookup('file', '../vars/ip_2-id.yml') }}"
+
+  - name: Infrastructure (Create Group) 
+    add_host: 
+     hostname: "{{ item }}"
+     groupname: webserver
+    with_items: 
+     - "{{ ip_1 }}"
+     - "{{ ip_2 }}" 
+
+- hosts: webserver
+  tasks:
+  - name: Test
+    apt:
+     name: httpd
+     state: latest
