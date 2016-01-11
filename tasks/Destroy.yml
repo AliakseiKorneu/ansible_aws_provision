@@ -1,0 +1,108 @@
+---
+- hosts: local
+  connection: local
+  gather_facts: no
+  vars_files:
+  - ../vars/Provision.yml
+  tasks:
+  - name: Set instances ID
+    set_fact:
+     instance_1_id: "{{ lookup('file', '../vars/instance_1-id.yml') }}"
+     instance_2_id: "{{ lookup('file', '../vars/instance_2-id.yml') }}"
+
+  - name: Set volumes ID
+    set_fact:
+     volume_1_id: "{{ lookup('file', '../vars/volume_1-id.yml') }}"
+     volume_2_id: "{{ lookup('file', '../vars/volume_2-id.yml') }}"
+
+  - name: Destroy ELB Instance
+    local_action:
+     module: ec2_elb_lb
+     aws_region: "{{ vpc_region }}"
+     name: "{{ load_balancer_name }}"
+     state: absent
+
+  - name: Destroy Instances
+    local_action:
+     module: ec2
+     aws_region: "{{ vpc_region }}"
+     instance_type: "{{ web_instance_type }}"
+     image: "{{ ami_image }}"
+     instance_ids: "{{ item }}"
+     state: absent
+     wait: yes
+     wait_timeout: 600
+    with_items:
+      - "{{ instance_1_id }}"
+      - "{{ instance_2_id }}"
+    ignore_errors: True
+
+  - name: Destroy EBS volumes
+    local_action:
+     module: ec2_vol
+     region: "{{ vpc_region }}"
+     state: absent
+     id: "{{ item }}"
+    with_items:
+     - "{{ volume_1_id }}"
+     - "{{ volume_2_id }}"
+    ignore_errors: True
+
+#The RDS instance is deleted, but an error appears. Bug?
+  - name: Destroy RDS Instance
+    local_action:
+     module: rds
+     command: delete
+     region: "{{ vpc_region }}"
+     instance_name: "{{ rds_instance_name }}"
+     wait: yes
+    ignore_errors: True
+
+  - name: Destroy RDS Subnet Group
+    local_action:
+     module: rds_subnet_group
+     aws_region: "{{ vpc_region }}"
+     name: "{{ rds_subnet_group }}"
+     state: absent
+    ignore_errors: True 
+
+  - name: Destroy RDS Security Group
+    local_action:
+     module: ec2_group
+     aws_region: "{{ vpc_region }}"
+     name: "{{ item.sg_name }}"
+     description: "{{ item.sg_description }}"
+     state: absent
+    with_items: rds_security_groups
+    ignore_errors: True
+
+  - name: Destroy ELB Security Group
+    local_action:
+     module: ec2_group
+     aws_region: "{{ vpc_region }}"
+     name: "{{ item.sg_name }}"
+     description: "{{ item.sg_description }}"
+     state: absent
+    with_items: elb_security_groups
+    ignore_errors: True
+
+  - name: Destroy Security Group
+    local_action:
+     module: ec2_group
+     aws_region: "{{ vpc_region }}"
+     name: "{{ item.sg_name }}"
+     description: "{{ item.sg_description }}"
+     state: absent
+    with_items: web_security_groups
+    ignore_errors: True
+
+  - name: Destroy VPC
+    local_action: 
+     module: ec2_vpc
+     region: "{{ vpc_region }}"
+     state: absent
+     cidr_block: "{{ vpc_cidr_block }}"
+     resource_tags: { "Name":"{{ vpc_name }}-vpc" }
+     subnets: "{{ vpc_subnets }}" 
+     internet_gateway: yes
+     route_tables: "{{ public_subnet_rt }}"

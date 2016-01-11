@@ -1,0 +1,4 @@
+---
+ - include: tasks/Provision.yml
+ - include: tasks/Configure.yml
+ - include: tasks/Test.yml

@@ -1,0 +1,69 @@
+---
+- hosts: local
+  connection: local
+  gather_facts: no
+  vars_files:
+  - ../vars/Provision.yml
+  tasks:
+  - name: Set IP adresses
+    set_fact:
+     ip_1: "{{ lookup('file', '../vars/ip_1-id.yml') }}"
+     ip_2: "{{ lookup('file', '../vars/ip_2-id.yml') }}"
+
+  - name: Infrastructure (Create Group) 
+    add_host: 
+     hostname: "{{ item }}"
+     groupname: webserver
+    with_items: 
+     - "{{ ip_1 }}"
+     - "{{ ip_2 }}" 
+
+- hosts: webserver
+  remote_user: ubuntu
+  sudo: yes
+  tasks:
+  - name: Install apache2
+    apt:
+     name: apache2
+     state: latest
+
+  - name: Install PHP and Extensions
+    apt: 
+     name: "{{ item }}"
+     state: latest
+    with_items:
+     - php5
+     - php5-cli
+     - imagemagick
+     - php5-gd
+
+  - name: Install MySQL
+    apt:
+     name: "{{ item }}"
+     state: latest
+    with_items: 
+     - mysql-server
+     - mysql-client
+     - php5-mysql
+
+  - copy: src=./../files/ports.conf dest=/etc/apache2/ports.conf force=yes
+    notify: Restart Apache
+
+  - copy: src=./../files/000-default.conf dest=/etc/apache2/sites-enabled/000-default.conf force=yes
+    notify: Restart Apache
+
+  - file: dest=/var/www/html/index.html state=absent
+    notify: Restart Apache
+
+  - copy: src=./../files/index.php dest=/var/www/html/index.php force=yes
+    notify: Restart Apache
+
+  - copy: src=./../files/default dest=/etc/nginx/sites-available/default force=yes
+    notify: Restart nginx
+
+  handlers:
+   - name: Restart Apache
+     action: service name=apache2 state=restarted
+
+   - name: Restart nginx
+     action: service name=nginx state=restarted

@@ -1,0 +1,286 @@
+---
+- hosts: local
+  connection: local
+  gather_facts: no
+  vars_files:
+  - ../vars/Provision.yml
+  tasks:
+
+  - name: Keys (Find the current login user)
+    command: whoami
+    register: login_user
+
+  - name: Keys (Check that the SSH Key exists)
+    local_action:
+     module: stat
+     path: "{{ ssh_key_location }}"
+    register: sshkey_result
+
+  - name: Keys (Generate new SSH key (if doesn't exists))
+    local_action:
+      module: user
+      name: "{{ login_user.stdout }}"
+      generate_ssh_key: yes 
+      ssh_key_bits: 2048
+    when: sshkey_result.stat.exists == False
+
+  - name: Keys (Create ec2 key)
+    local_action:
+     module: ec2_key
+     region: "{{ vpc_region }}"
+     name: "{{ key_name }}"
+     key_material:  "{{ lookup('file',  ssh_key_location ) }}" 
+
+  - name: VPC (Create)
+    local_action: 
+     module: ec2_vpc
+     region: "{{ vpc_region }}"
+     state: present
+     cidr_block: "{{ vpc_cidr_block }}"
+     resource_tags: { "Name":"{{ vpc_name }}-vpc" }
+     subnets: "{{ vpc_subnets }}" 
+     internet_gateway: yes
+     route_tables: "{{ public_subnet_rt }}"
+    register: vpc
+
+  - name: VPC (Set facts)
+    set_fact:
+     public_subnet_1: "{{ vpc.subnets[0].id }}"
+     public_subnet_2: "{{ vpc.subnets[1].id }}"
+     private_subnet: "{{ vpc.subnets[2].id }}"
+
+  - name: RDS (Create RDS Security Group)
+    local_action:
+     module: ec2_group
+     name: "{{ item.sg_name }}"
+     description: "{{ item.sg_description }}"
+     region: "{{ vpc_region }}" 
+     vpc_id: "{{ vpc.vpc_id }}" 
+     state: present
+     rules: "{{ item.sg_rules }}"
+    with_items: rds_security_groups
+    register: rds_sg
+
+  - name: RDS (Add name to RDS Security Group)
+    local_action:
+     module: ec2_tag
+     resource: "{{ item.group_id}}"
+     region: "{{ vpc_region }}"
+     state: present
+     tags:
+       Name: "{{ vpc_name }}-{{ item.item.sg_name }}"
+    with_items: rds_sg.results
+
+  - name: RDS (Set facts)
+    set_fact:
+     rds_security_group: "{{ item.group_id}}"
+    with_items: rds_sg.results
+
+  - name: RDS (Create RDS Subnet Group)
+    local_action:
+     module: rds_subnet_group
+     region: "{{ vpc_region }}"
+     state: present
+     name: "{{ rds_subnet_group }}"
+     description: "{{ rds_sg_description }}"
+     subnets:
+       "{{ vpc.subnets | map(attribute='id') | list }}"
+
+  - name: RDS (Create RDS Instance)
+    local_action:
+     module: rds
+     command: create
+     region: "{{ vpc_region }}"
+     multi_zone: "{{ multi_zone_option }}"
+     subnet: "{{ rds_subnet_group }}"
+     vpc_security_groups: "{{ rds_security_group }}" 
+     instance_name: "{{ rds_instance_name }}"
+     db_engine: "{{ rds_db_engine }}"
+     size: "{{ rds_db_size }}"
+     db_name: "{{ rds_db_name }}"
+     instance_type: "{{ rds_instance_type }}"
+     username: "{{ rds_db_username }}"
+     password: "{{ rds_db_password }}"
+     backup_retention: "{{ backup_retention_period }}"
+     wait: yes
+     wait_timeout: 600
+    register: rds
+
+  - name: Infrastructure (Create Security Group)
+    local_action:
+     module: ec2_group
+     name: "{{ item.sg_name }}"
+     description: "{{ item.sg_description }}"
+     region: "{{ vpc_region }}" 
+     vpc_id: "{{ vpc.vpc_id }}" 
+     state: present
+     rules: "{{ item.sg_rules }}"
+    with_items: web_security_groups
+    register: web_sg
+
+
+  - name: Infrastructure (Add name to Security Group)
+    local_action:
+     module: ec2_tag
+     resource: "{{ item.group_id}}"
+     region: "{{ vpc_region }}"
+     state: present
+     tags:
+       Name: "{{ vpc_name }}-{{ item.item.sg_name }}"
+    with_items: web_sg.results
+
+
+  - name: Infrastructure (Create Instances)
+    local_action:
+     module: ec2
+     region: "{{ vpc_region }}"
+     group: "{{ web_security_groups[0].sg_name }}"
+     keypair: "{{ key_name }}"
+     instance_type: "{{ web_instance_type }}"
+     image: "{{ ami_image }}"
+     vpc_subnet_id: "{{ item }}"
+     assign_public_ip: True
+     wait: True
+     wait_timeout: 600
+     instance_tags:
+       Name: "{{ web_server_name }}"
+     user_data: |
+               #!/bin/sh
+               sudo apt-get update
+               sudo apt-get install nginx -y
+    with_items:
+       - "{{ public_subnet_1 }}"
+       - "{{ public_subnet_2 }}"
+    register: web
+
+  - name: Infrastructure (Set the Instances facts)
+    set_fact:
+     instance_public_ip_1: "{{ web.results[0].instances[0].public_ip }}"
+     instance_id_1: "{{ web.results[0].instances[0].id }}"
+     instance_public_ip_2: "{{ web.results[1].instances[0].public_ip }}"
+     instance_id_2: "{{ web.results[1].instances[0].id }}"
+
+  - name: Store Instance 1 ID to file
+
+    shell: echo "{{ instance_id_1 }}" > "instance_1-id.yml"
+    args:
+     chdir: ../vars/
+
+  - name: Store Instance 2 ID to file
+
+    shell: echo "{{ instance_id_2 }}" > "instance_2-id.yml"
+    args:
+     chdir: ../vars/
+
+  - name: Store Public IP 1 to file
+
+    shell: echo "{{ instance_public_ip_1 }}" > "ip_1-id.yml"
+    args:
+     chdir: ../vars/
+
+  - name: Store Instance 2 ID to file
+
+    shell: echo "{{ instance_public_ip_2 }}" > "ip_2-id.yml"
+    args:
+     chdir: ../vars/
+
+  - name: Infrastructure (Wait for SSH)
+    local_action: 
+     module: wait_for 
+     host: "{{ item }}" 
+     port: 22 
+     state: started
+    with_items: 
+     - "{{ instance_public_ip_1 }}"
+     - "{{ instance_public_ip_2 }}" 
+
+  - name: Infrastructure (Create Group) 
+    add_host: 
+     hostname: "{{ item }}"
+     groupname: webserver
+    with_items: 
+     - "{{ instance_public_ip_1 }}"
+     - "{{ instance_public_ip_2 }}" 
+
+  - name: Infrastructure (Create and add EBS)
+    local_action:
+     module: ec2_vol
+     region: "{{ vpc_region }}"
+     instance: "{{ item }}"
+     volume_size: 5
+     device_name: sdd
+    with_items:
+     - "{{ instance_id_1 }}"
+     - "{{ instance_id_2 }}"
+    register: ebs
+
+  - name: Store Volume 1 ID to file
+
+    shell: echo "{{ ebs.results[0].volume_id }}" > "volume_1-id.yml"
+    args:
+     chdir: ../vars/
+
+  - name: Store Volune 2 ID to file
+
+    shell: echo "{{ ebs.results[1].volume_id }}" > "volume_2-id.yml"
+    args:
+     chdir: ../vars/
+
+  - name: Infrastructure (Create ELB Security Group)
+    local_action:
+     module: ec2_group
+     name: "{{ item.sg_name }}"
+     description: "{{ item.sg_description }}"
+     region: "{{ vpc_region }}" 
+     vpc_id: "{{ vpc.vpc_id }}" 
+     state: present
+     rules: "{{ item.sg_rules }}"
+    with_items: elb_security_groups
+    register: elb_sg
+
+  - name: Infrastructure (Add ELB Name)
+    local_action:
+     module: ec2_tag
+     resource: "{{ item.group_id}}"
+     region: "{{ vpc_region }}"
+     state: present
+     tags:
+       Name: "{{ vpc_name }}-{{ item.item.sg_name }}"
+    with_items: elb_sg.results
+
+  - name: Infrastructure (Set ELB facts)
+    set_fact:
+     elb_security_group: "{{ item.group_id}}"
+    with_items: elb_sg.results
+
+  - name: Infrastructure (Create ELB)
+    local_action:
+     module: ec2_elb_lb
+     name: "{{ load_balancer_name }}"
+     security_group_ids: "{{ elb_security_group }}"
+     state: present
+     region: "{{ vpc_region }}"
+     subnets: 
+       - "{{ public_subnet_1 }}"
+       - "{{ public_subnet_2 }}"
+     purge_subnets: "{{ elb_purge_subnets }}"
+     cross_az_load_balancing: "{{ elb_cross_az_load_balancing }}"
+     connection_draining_timeout: "{{ elb_connection_draining_timeout }}"
+     listeners:
+       - protocol: http
+         load_balancer_port: 80
+         instance_protocol: http
+         instance_port: 80
+    register: web_elb
+
+  - name: Infrastructure (Add EC2 instances to ELB)
+    local_action:
+     module: ec2_elb
+     region: "{{ vpc_region }}"
+     ec2_elbs: "{{ load_balancer_name }}"
+     instance_id: "{{ item }}"
+     state: present
+     wait: yes
+    with_items: 
+     - "{{ instance_id_1 }}"
+     - "{{ instance_id_2 }}"
