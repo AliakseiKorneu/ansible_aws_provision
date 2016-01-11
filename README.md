@@ -1,16 +1,28 @@
 # Deployment-LAMP-stack-to-AWS
 
 Create:
-*VPC
-**RDS Security Group
-***RDS Subnet Group
-****RDS Instance
-**Security Group
-***EC2 Instance
-****EBS
-**ELB Security Group
-***ELB
-**ADD EC2 instances to ELB
+* VPC
+* RDS Security Group
+* RDS Subnet Group
+* RDS Instance
+* Security Group
+* 2 EC2 Instances
+* EBS
+* ELB Security Group
+* ELB
+* ADD EC2 instances to ELB
+
+Configure:
+* Install Apache2
+* Install PHP (+modules)
+* Install MySQL
+* Instalk nginx and configured it as proxy
+
+Test:
+* Test 200 HTTP Response
+
+Destroy:
+*Destroy all infrastrusture
 
 
 to /etc/ansible/hosts
