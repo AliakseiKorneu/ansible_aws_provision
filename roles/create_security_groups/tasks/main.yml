@@ -1,0 +1,10 @@
+---
+- name: Configure sercurity groups
+  ec2_group:
+    name: "{{ item.name }}"
+    description: "{{ item.description }}"
+    vpc_id: "{{ vpc_id | mandatory }}"
+    region: "{{ region | mandatory }}"
+    rules: "{{ item.rules }}"
+  with_items: "{{ create_security_groups_sgs }}"    
+  when: create_security_groups_sgs|length > 0

@@ -1,0 +1,28 @@
+---
+## TODO: Add stickiness
+- name: Create elastic loadbalancer
+  ec2_elb_lb:
+    state: present
+    region: "{{ region }}"
+    name: "{{ create_elb_name }}"
+    subnets: "{{ create_elb_subnets | default(subnets_by_type.get('private', {}) | map_attr('id')) }}"
+    purge_subnets: "{{ create_elb_purge_subnets | default(omit) }}"
+    scheme: "{{ create_elb_scheme | default('internal') }}"
+    security_group_ids: "{{ create_elb_group_id_list }}"
+    listeners: "{{ create_elb_listeners }}"
+    health_check: "{{ create_elb_health_check | default(omit) }}"
+    purge_listeners: "{{ create_elb_purge_listeners | default(omit) }}"
+    validate_certs: "{{ create_elb_validate_certs | default(omit) }}"
+    connection_draining_timeout: "{{ create_elb_connection_draining_timeout | default(omit) }}"
+    idle_timeout: "{{ create_elb_idle_timeout | default(60) }}"
+    cross_az_load_balancing: "{{ create_elb_cross_az_load_balancing | default(omit) }}"
+    wait: "{{ create_elb_wait | default('yes') }}"
+    wait_timeout: "{{ create_elb_wait_timeout | default(600) }}"
+    access_logs: "{{ create_elb_access_logs | default(omit) }}"
+    stickiness: "{{ create_elb_stickiness | default(omit) }}"
+    tags: "{{ create_elb_tags }}"
+    append_tags: "{{ create_elb_append_tags | default(omit) }}"
+  register: load_balancer
+  until: "load_balancer.module_stderr is not defined"
+  retries: 2
+  delay: 1

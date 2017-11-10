@@ -1,0 +1,59 @@
+---
+- name: Lookup availability zones
+  aws_lookup:
+    region: "{{ region }}"
+    az:
+      register: azs
+
+- name: Set necessary facts
+  set_fact:
+    multiplier: "{{ ((create_aws_vpc_subnets | length) / (azs.keys() | length)) | round(0, 'ceil') | int }}"
+  when: (create_aws_vpc_subnets | length) > (azs.keys() | length)
+
+- name: Create list of subnets
+  set_fact:
+    subnet:
+      cidr: "{{ item.1 }}"
+      az: "{{ (azs.keys() * (multiplier | default(1) | int))[item.0] }}"
+      tags: { "Environment" : "{{ env_name }}", "network" : "{{ create_aws_subnet_placement }}", "Name" : "{{ create_aws_vpc_name }}{{ item.0 }}" }
+  with_indexed_items: "{{ create_aws_vpc_subnets }}"
+  register: subnets
+
+- name: Create VPC
+  ec2_vpc_net:
+    state: present
+    region: "{{ region }}"    
+    name: "{{ create_aws_vpc_name }}"
+    cidr_block: "{{ create_aws_vpc_cidr_block }}"
+    tags: { "Environment" : "{{ env_name }}" }
+  register: vpc_result
+
+- name: Create VPC internet gateway
+  ec2_vpc_igw:
+    state: present
+    region: "{{ region }}"
+    vpc_id: "{{ vpc_result.vpc.id }}"
+  when: create_aws_vpc_gateway
+  register: gateway_result
+
+- name: Create VPC subnets
+  ec2_vpc_subnet:
+    state: present
+    region: "{{ region }}"
+    vpc_id: "{{ vpc_result.vpc.id }}"
+    az: "{{ item.ansible_facts.subnet.az }}"
+    cidr: "{{ item.ansible_facts.subnet.cidr }}"
+    tags: "{{ item.ansible_facts.subnet.tags }}"
+  with_items: "{{ subnets.results }}"
+  register: subnets_result
+
+- name: Create VPC route tables
+  ec2_vpc_route_table:
+    state: present
+    region: "{{ region }}"
+    vpc_id: "{{ vpc_result.vpc.id }}"
+    subnets: "{{ item.subnet.id }}"
+    routes:
+      - dest: 0.0.0.0/0
+        gateway_id: "{{ gateway_result.gateway_id }}"
+  with_items: "{{ subnets_result.results }}"

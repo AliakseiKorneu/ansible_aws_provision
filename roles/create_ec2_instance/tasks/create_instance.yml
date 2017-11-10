@@ -1,0 +1,27 @@
+---
+- set_fact:
+    host_tags: "{{ project }}:{{ env_name }}"
+
+- name: Create a host in a subnet
+  ec2:
+    key_name: "{{ create_ec2_instance_keypair_name }}"
+    instance_type: "{{ create_ec2_instance_type }}"
+    image: "{{ create_ec2_instance_image_id }}"
+    wait: "{{ create_ec2_instance_wait | default('yes') }}"
+    wait_timeout: 500
+    group: "{{ create_ec2_instance_security_group }}"
+    exact_count: "{{ create_ec2_instance_count | default(1) }}"
+    count_tag:
+        provision_tags: "{{ host_tags }}:{{ item }}"
+    region: "{{ region }}"
+    instance_tags:
+      Name: "{{ create_ec2_instance_name }}"
+      provision_tags: "{{ host_tags }}:{{ item }}"
+      Environment: "{{ env_name }}"
+    monitoring: yes
+    vpc_subnet_id: "{{ create_ec2_instance_subnet_id[ item | int ].id }}"
+    assign_public_ip: "{{ create_ec2_instance_assign_public_ip }}"
+    instance_profile_name: "{{ create_ec2_instance_instance_profile_name | default('') }}"
+    volumes: "{{ create_ec2_instance_instance_volumes | default([ ]) }}"
+  with_sequence: "start=0 end={{ create_ec2_instance_subnets_count | int - 1 }}"
+  register: ec2

@@ -1,0 +1,12 @@
+---
+- name: Looking for ELB info
+  ec2_elb_facts:
+    names: [ "{{ elb_info_load_balancer_name }}" ]
+    region: "{{ region }}"
+  register: _elb_info
+  ignore_errors: ignore_errors | default(false)
+
+- name: Retrieving ELB data
+  set_fact:
+    elb_info: "{{ (_elb_info.elbs | length > 0) | ternary( {'elb': _elb_info.elbs | first}, omit) }}"
+  when: _elb_info.elbs is defined

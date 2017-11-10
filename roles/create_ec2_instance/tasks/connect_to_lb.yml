@@ -1,0 +1,10 @@
+---
+- name: Connect to load balancer
+  ec2_elb:
+    instance_id: "{{ item.tagged_instances.0.id }}"
+    region: "{{ region }}"
+    ec2_elbs: "{{ create_ec2_instance_elb_ids }}"
+    state: present
+    wait: "{{ create_ec2_instance_elb_wait | default(false) }}"
+    wait_timeout: 600
+  with_items:  "{{ ec2.results }}"

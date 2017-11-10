@@ -1,0 +1,13 @@
+---
+- name: Lookup VPC info
+  aws_lookup:
+    region: "{{ region }}"
+    security_group:
+      vpc_name     : "{{ sg_info_vpc_name }}"
+      register     : sg
+
+- name: Wait for Security Group
+  set_fact:
+    _sg: "{{ sg[sg_ingo_security_group_name_mandatory] }}"
+  register: _result
+  until: _result | success

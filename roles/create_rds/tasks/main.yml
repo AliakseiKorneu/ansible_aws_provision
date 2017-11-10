@@ -1,0 +1,47 @@
+---
+- name: Create subnet group
+  rds_subnet_group:
+    state: present
+    name: "{{ create_rds_patameters.subnet_group_name }}"
+    description: "Subnet for {{ create_rds_patameters.subnet_group_name }}"
+    region: "{{ region }}"
+    subnets: "{{ create_rds_subnets }}"
+  when: (create_rds_patameters is defined and create_rds_patameters) and (create_rds_create_subnet_group | default(true) | bool)
+
+- name: Creating profile of RDS instance
+  rds_param_group:
+    state: present
+    name: "{{ create_rds_create_param_profile.name }}"
+    description: "Profile {{ create_rds_create_param_profile.name }} of {{ create_param_profile.engine }} database"
+    engine: "{{ create_rds_create_param_profile.engine }}"
+    params: "{{ create_rds_create_param_profile.attrs }}"
+  when: create_rds_create_param_profile is defined and create_rds_create_param_profile
+
+- name: Create RDS instance
+  rds:
+    command: create
+    instance_name: "{{ create_rds_patameters.instance_name }}"
+    region: "{{ region }}"
+    db_engine: "{{ create_rds_patameters.db_engine }}"
+    engine_version: "{{ create_rds_patameters.db_version | default(omit) }}"
+    size: "{{ create_rds_patameters.instance_size }}"
+    instance_type: "{{ create_rds_patameters.instance_type }}"
+    db_name: "{{ create_rds_patameters.db_name | default(omit) }}"
+    username: "{{ create_rds_patameters.db_username }}"
+    password: "{{ create_rds_patameters.db_password }}"
+    port: "{{ create_rds_patameters.db_port }}"
+    backup_retention: "{{ create_rds_patameters.backup_retention | default(30) | int }}"
+    backup_window: "{{ create_rds_patameters.backup_window | default(omit) }}"
+    subnet: "{{ create_rds_patameters.subnet_group_name }}"
+    vpc_security_groups: "{{ create_rds_sgs | default(omit) }}"
+    multi_zone: "{{ create_rds_multizone | default('yes') }}"
+    option_group: "{{ create_rds_patameters.option_group | default(omit) }}"
+    license_model: "{{ create_rds_patameters.license_model | default(omit) }}"
+    wait: "{{ create_rds_wait | default(true) }}"
+    wait_timeout: "{{ create_rds_wait_timeout | default(1500) }}"
+    parameter_group: "{{ create_param_profile.name if create_param_profile is defined else omit }}"
+    tags:
+      Name: "{{ create_rds_patameters.instance_name }}"
+      Environment: "{{ env_name }}"
+  register: rds_info
+  when: create_rds_patameters is defined and create_rds_patameters

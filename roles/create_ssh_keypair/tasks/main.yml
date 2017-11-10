@@ -1,0 +1,28 @@
+---
+- name: Check that the SSH Key exists
+  stat:
+    path: "~/.ssh/{{ create_ssh_keypair_name }}.pub"
+  register: sshkey_result
+
+- name: Generate new SSH key (if doesn't exists)
+  user:      
+    name: "{{ ansible_env.USER }}"
+    generate_ssh_key: yes 
+    ssh_key_file: ".ssh/{{ create_ssh_keypair_name }}"
+  when: sshkey_result.stat.exists == False
+
+- stat: 
+    path: "~/.ssh/{{ create_ssh_keypair_name }}.pub"
+  register: st
+
+- fail: 
+    msg: "~/.ssh/{{ create_ssh_keypair_name }}.pub does not exist! You may want to do cd ~/.ssh && ssh-keygen -f {{ create_ssh_keypair_name }}"
+  when: not st.stat.exists
+
+- name: Generate a key pair using a public key
+  ec2_key:
+    name: "{{ create_ssh_keypair_name }}"
+    region: "{{ region }}"
+    key_material: "{{ item }}"
+  with_file: ~/.ssh/{{ create_ssh_keypair_name }}.pub
+  register: key_pair

@@ -1,0 +1,67 @@
+---
+- hosts: local
+  connection: local
+  gather_facts: no
+  vars:
+    keypair_name: "{{ ssh_keypair_name }}"
+    vpc_name: "{{ project_vpc_name }}"
+    network: "{{ placement_network }}"
+    region: "{{ aws_region }}"
+    sgs:
+      - name: "{{ app_security_group_name }}"
+        description: "Security group {{ app_security_group_name }}"
+        rules: "{{ app_security_rules }}"
+      - name: "{{ elb_security_group_name }}"
+        description: "Security group {{ elb_security_group_name }}"
+        rules: "{{ elb_security_rules }}"
+
+  roles:
+    - role: create_vpc
+      create_aws_vpc_name: "{{ vpc_name }}"
+      create_aws_vpc_cidr_block: "{{ project_vpc_cidr_block }}"
+      create_aws_vpc_subnets: "{{ project_vpc_subnets }}"
+      create_aws_subnet_placement: "{{ network }}"
+      create_aws_vpc_gateway: "{{ project_vpc_gateway }}"
+    - role: create_ssh_keypair
+      create_ssh_keypair_name: "{{ ssh_keypair_name }}"
+    - role: vpc_info
+      vpc_info_name: "{{ vpc_name }}" 
+    - role: create_security_groups
+      create_security_groups_sgs: "{{ sgs }}"
+    - role: sg_info
+      sg_info_vpc_name: "{{ vpc_name }}"
+      sg_ingo_security_group_name_mandatory: "{{ elb_security_group_name }}" 
+    - role: create_elb
+      create_elb_name: "{{ project_elb_name }}"
+      create_elb_subnets: "{{ subnets_by_type['private'] | map_attr('id') }}"
+      create_elb_scheme: "{{ project_elb_scheme }}"
+      create_elb_group_id_list: "{{ sg[elb_security_group_name].id }}"
+      create_elb_listeners: "{{ project_elb_listeners }}"
+      create_elb_health_check: "{{ project_elb_health_check | default({}) }}"
+      create_elb_tags: { "Environment" : "{{ env_name }}" }
+      create_elb_cross_az_load_balancing: yes
+    - role: elb_info
+      elb_info_load_balancer_name: "{{ project_elb_name }}"
+    - role: create_ec2_instance
+      create_ec2_instance_keypair_name: "{{ ssh_keypair_name }}"
+      create_ec2_instance_type: "{{ instance_type }}"
+      create_ec2_instance_image_id: "{{ image_id }}"
+      create_ec2_instance_name: "{{ project_ec2_instance_name }}"
+      create_ec2_instance_security_group: "{{ app_security_group_name }}"
+      create_ec2_instance_subnets_count: "{{ instance_subnets_count }}"
+      create_ec2_instance_count: "{{ instance_exact_count }}"
+      create_ec2_instance_subnet_id: "{{ subnets_by_type[placement_network] }}"
+      create_ec2_instance_assign_public_ip: true
+      create_ec2_instance_attach_to_lb: true
+      create_ec2_instance_elb_ids: "{{ elb_info.elb.name }}"
+    - role: create_security_groups
+      create_security_groups_sgs: "{{ project_rds_security_groups | default([]) }}"
+    - role: sg_info
+      sg_info_vpc_name: "{{ vpc_name }}"
+      sg_ingo_security_group_name_mandatory: "{{ elb_security_group_name }}" 
+    - role: create_rds
+      create_rds_patameters: "{{ project_rds | default({}) }}"
+      create_rds_create_param_profile: "{{ create_param_profile | default({}) }}"
+      create_rds_sgs: "{{ sg[project_rds.sgs_name].id }}"
+      create_rds_subnets: "{{ subnets_by_type[placement_network] | map_attr('id') }}"
+      create_rds_multizone: false

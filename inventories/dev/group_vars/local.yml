@@ -1,0 +1,96 @@
+---
+project: TEST
+aws_region: "us-west-2"
+env_name: "staging"
+subsystem_name: "dev"
+ssh_keypair_name: "id_rsa"
+project_vpc_name: "{{ project }}-{{ subsystem_name }}-{{ env_name }}"
+project_vpc_cidr_block: 10.10.0.0/16
+project_vpc_subnets: ["10.10.0.0/24", "10.10.1.0/24", "10.10.2.0/24"]
+project_vpc_gateway: true
+placement_network: private
+az_idx: 0
+
+## EC2 instances configuration ##
+instance_type: t2.micro
+image_id: ami-0a00ce72
+instance_subnets_count: 2
+instance_exact_count: 1
+
+## Add here list of security rules for your applications ##
+app_security_group_name: "{{ project }}-sg-{{ subsystem_name }}-{{ env_name }}"
+app_security_rules:
+   - proto:       tcp
+     from_port:   22
+     to_port:     22
+     cidr_ip:     "0.0.0.0/0"
+   - proto:       tcp
+     from_port:   80
+     to_port:     80
+     cidr_ip:     "0.0.0.0/0"
+   - proto:       tcp
+     from_port:   8000
+     to_port:     8000
+     cidr_ip:     "0.0.0.0/0"
+
+## Add here list of security rules for ELB ##
+elb_security_group_name: "{{ project }}-elb-sg-{{ subsystem_name }}-{{ env_name }}"
+elb_security_rules:
+   - proto:       tcp
+     from_port:   22
+     to_port:     22
+     cidr_ip:     "0.0.0.0/0"
+   - proto:       tcp
+     from_port:   80
+     to_port:     80
+     cidr_ip:     "0.0.0.0/0"
+
+project_elb_name: "{{ project }}-{{ subsystem_name }}-{{ env_name }}"
+project_elb_scheme: internet-facing
+project_elb_listeners:
+  - protocol: http
+    load_balancer_port: "80"
+    instance_protocol: http
+    instance_port: "8000"
+
+## Uncomment here to enable healthcheck for ELB ##
+# project_elb_health_check:
+#   ping_protocol:       http
+#   ping_port:           8000
+#   ping_path:           "/healthcheck" 
+#   response_timeout:    2 # seconds
+#   interval:            5 # seconds
+#   unhealthy_threshold: 2
+#   healthy_threshold:   5
+##################################################
+
+project_ec2_instance_name: "{{ project }}-{{ subsystem_name }}-{{ env_name }}"
+
+## Uncomment project_rds and project_rds_security_groups variables ##
+## to enable RDS creation                                          ##
+# project_rds:
+#   db_engine: MySQL
+#   subnet_group_name: "{{ project }}-rds-group-{{ subsystem_name }}-{{ env_name }}"
+#   instance_name: "{{ project }}-rds-{{ subsystem_name }}-{{ env_name }}"
+#   instance_size: 5
+#   instance_type: db.t2.micro
+#   db_name: "{{ project }}"
+#   db_username: "{{ project }}"  
+#   db_password: testpassword # Only printable ASCII characters besides '/', '@', '\"', ' ' may be used.
+#   db_port: 3306
+#   backup_retention: 14
+#   backup_window: 8:00-8:30
+#   sgs_name: "{{ project }}-rds-{{ subsystem_name }}-{{ env_name }}"
+#   multizone: false
+
+# project_rds_sgs_rules:
+#   - proto:       tcp
+#     from_port:   "{{ project_rds.db_port }}"
+#     to_port:     "{{ project_rds.db_port }}"
+#     cidr_ip:     "0.0.0.0/0"  
+
+# project_rds_security_groups:
+#   - name: "{{ project_rds.sgs_name }}"
+#     description: "Security group {{ project_rds.sgs_name }}"
+#     rules: "{{ elb_security_rules }}"
+#####################################################################

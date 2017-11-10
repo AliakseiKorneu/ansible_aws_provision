@@ -1,0 +1,14 @@
+---
+- name: Lookup VPC info
+  aws_lookup:
+    region: "{{ region }}"
+    vpc:
+      vpc_name     : "{{ vpc_info_name }}"
+      register     : vpc_info
+    az:
+      register: "azs"
+
+- set_fact:
+    vpc_id: "{{ vpc_info.id }}"
+    vpc_cidr: "{{ vpc_info.cidr_block }}"
+    subnets_by_type: "{{ vpc_info.subnets.values() | group_by_attr('tags.network') }}"

@@ -1,0 +1,5 @@
+---
+- include_tasks: "create_instance.yml"
+
+- include_tasks: "connect_to_lb.yml"
+  when: create_ec2_instance_attach_to_lb | default(false)
